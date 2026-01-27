@@ -26,21 +26,33 @@ export async function getAllConversions() {
  */
 export async function getConversionById(id: string) {
     try {
-        const conversionId = parseInt(id);
-        if (isNaN(conversionId)) {
+        console.log("id", id);
+        const conversionId = Number(id);
+        if (Number.isNaN(conversionId)) {
             return { success: false, error: "ID invalide" };
         }
 
-        const conversions = await prisma.$queryRaw<any[]>`
+        const rows = await prisma.$queryRaw<any[]>`
             SELECT * FROM VConvertions
             WHERE ID_Convertion = ${conversionId}
         `;
-
-        if (!conversions || conversions.length === 0) {
+        if (!rows.length) {
             return { success: false, error: "Conversion non trouvée" };
         }
 
-        return { success: true, data: conversions[0] };
+        const row = rows[0];
+
+         // ✅ NORMALISATION
+        const conversion = {
+            id: row.ID_Convertion,
+            dateConvertion: row.Date_Convertion,
+            dateCreation: row.Date_Creation,
+            entite: row.Entite,
+        };
+
+        console.log("conversion", conversion);
+
+        return { success: true, data: conversion };
     } catch (error) {
         console.error("Erreur lors de la récupération de la conversion:", error);
         return { success: false, error: "Impossible de récupérer la conversion" };
@@ -54,47 +66,42 @@ export async function getConversionById(id: string) {
 export async function createConversion(data: any) {
     try {
         const session = await getSession();
-        if (!session.user) {
+        if (!session?.user) {
             return { success: false, error: "Non authentifié" };
         }
-
+        if (!data.Date_Convertion) {
+            return { success: false, error: "Date de conversion requise" };
+        }
         // Créer la date de conversion sans les heures/minutes/secondes en heure locale
-        const dateConvertion = new Date(data.dateConvertion);
+        const dateConvertion = new Date(data.Date_Convertion);
         dateConvertion.setHours(0, 0, 0, 0); // Mettre à 00:00:00.000 en heure locale
         
-        const dateCreation = new Date();
-
         // Créer la conversion
-        const result = await prisma.$executeRaw`
-            INSERT INTO TConvertions ([Date Convertion], [Entite], [Session], [Date Creation])
-            VALUES (${dateConvertion}, 0, ${session.user.id}, ${dateCreation})
-        `;
+        const conversion = await prisma.tConvertions.create({
+        data: {
+            Date_Convertion: dateConvertion,
+            Entite: 0,
+            Session: Number(session.user.id),
+        },
+        });
+       
+            // taux devise locale
+        await prisma.tTauxChange.create({
+        data: {
+            Convertion: conversion.ID_Convertion,
+            Devise: 0,
+            Taux_Change: 1,
+            Session: Number(session.user.id),
+        },
+        });
 
-        // Récupérer l'ID de la conversion créée
-        const newConversion = await prisma.$queryRaw<Array<{ID: number}>>`
-            SELECT TOP 1 [ID Convertion] as ID
-            FROM TConvertions 
-            WHERE [Date Convertion] = ${dateConvertion} AND [Entite] = 0
-            ORDER BY [ID Convertion] DESC
-        `;
-
-        if (newConversion.length > 0) {
-            const conversionId = newConversion[0].ID;
-            
-            // Ajouter automatiquement le taux 1.0 pour la devise locale (ID 0)
-            await prisma.$executeRaw`
-                INSERT INTO TTauxChange ([Convertion], [Devise], [Taux Change], [Session], [Date Creation])
-                VALUES (${conversionId}, 0, 1.0, ${session.user.id}, ${dateCreation})
-            `;
-        }
-
-        revalidatePath("/conversion");
-        return { success: true };
+       revalidatePath("/conversion");
+      return { success: true, data: conversion };
     } catch (error) {
         console.error("Erreur création conversion:", error);
         return {
             success: false,
-            error: error instanceof Error ? error.message : "Erreur lors de la création"
+            error: error instanceof Error ? error.message : "Erreur lors de la création conversion"
         };
     }
 }

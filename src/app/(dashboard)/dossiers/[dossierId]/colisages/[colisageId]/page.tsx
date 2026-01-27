@@ -1,50 +1,68 @@
-import { headers } from "next/headers";
-import { redirect } from "next/navigation";
-
-import auth from "@/lib/auth";
 import { Suspense } from "react";
+import { notFound } from "next/navigation";
+import { ColisageDetailView } from "@/modules/dossiers/ui/views/colisage-detail-view";
+import { ColisageDetailHeader } from "@/modules/dossiers/ui/components/colisage-detail-header";
+import { LoadingState } from "@/components/loading-state";
+import { getColisageById } from "@/modules/dossiers/server/colisage-actions";
 import { getDossierById } from "@/modules/dossiers/server/actions";
-import {
-    DossierIdErrorView,
-    DossierIdLoadingView,
-    DossierIdView,
-} from "@/modules/dossiers/ui/views/dossier-id-view";
 
-interface Props {
+// Désactiver le cache pour cette page
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
+interface ColisageDetailPageProps {
     params: Promise<{
         dossierId: string;
+        colisageId: string;
     }>;
 }
 
-const Page = async ({ params }: Props) => {
-    const { dossierId } = await params;
-    const session = await auth.api.getSession({
-        headers: await headers(),
-    });
+async function ColisageDetailContent({ dossierId, colisageId }: { dossierId: number; colisageId: number }) {
+    const [dossierResult, colisageResult] = await Promise.all([
+        getDossierById(dossierId.toString()),
+        getColisageById(colisageId)
+    ]);
 
-    if (!session) {
-        redirect("/sign-in");
+    if (!dossierResult.success || !colisageResult.success) {
+        notFound();
     }
 
-    const res = await getDossierById(dossierId);
-
-    if (!res.success) {
-        return <DossierIdErrorView />;
-    }
-    const { data } = res;
-
-    if (!data) {
-        return <DossierIdErrorView />;
-    }
-
-    // Les données Prisma arrivent déjà avec les bons noms de champs
     return (
         <>
-            <Suspense fallback={<DossierIdLoadingView />}>
-                <DossierIdView dossier={data} dossierId={dossierId} />
-            </Suspense>
+            <ColisageDetailHeader 
+                dossier={dossierResult.data} 
+                colisage={colisageResult.data}
+            />
+            <ColisageDetailView 
+                dossierId={dossierId}
+                colisage={colisageResult.data}
+            />
         </>
     );
-};
+}
 
-export default Page;
+export default async function ColisageDetailPage({ params }: ColisageDetailPageProps) {
+    const resolvedParams = await params;
+    const dossierId = parseInt(resolvedParams.dossierId);
+    const colisageId = parseInt(resolvedParams.colisageId);
+
+    if (isNaN(dossierId) || isNaN(colisageId)) {
+        notFound();
+    }
+
+    return (
+        <div className="flex flex-col gap-y-4">
+            <Suspense fallback={
+                <LoadingState 
+                    title="Chargement du colisage..." 
+                    description="Veuillez patienter..." 
+                />
+            }>
+                <ColisageDetailContent 
+                    dossierId={dossierId} 
+                    colisageId={colisageId} 
+                />
+            </Suspense>
+        </div>
+    );
+}

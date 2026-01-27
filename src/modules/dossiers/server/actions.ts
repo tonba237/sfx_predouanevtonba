@@ -140,6 +140,8 @@ export async function getDossierById(id: string) {
             where: { ID_Dossier: parseInt(id) },  // Convertit l'ID string en nombre
         });
 
+        console.log("dossier", dossier);    
+
     
         // Si aucun dossier trouvé, retourne une erreur
         if (!dossier) {

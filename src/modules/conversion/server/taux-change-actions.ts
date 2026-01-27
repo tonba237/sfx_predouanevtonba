@@ -67,15 +67,11 @@ export async function getAllDevisesForSelect() {
                 Code_Devise: 'asc'
             }
         });
+
+        console.log("devises", devises);
+     
         
-        // Renommer id en idDevise pour la cohérence
-        const formattedDevises = devises.map(d => ({
-            idDevise: d.ID_Devise,
-            codeDevise: d.Code_Devise,
-            libelleDevise: d.Libelle_Devise
-        }));
-        
-        return { success: true, data: formattedDevises };
+        return { success: true, data: devises };
     } catch (error) {
         console.error("Erreur récupération devises:", error);
         return { success: false, error: "Erreur lors de la récupération des devises" };

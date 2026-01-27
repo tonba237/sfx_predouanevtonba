@@ -38,8 +38,7 @@ export const columns: ColumnDef<DossierView>[] = [
                 <div className="flex items-center gap-x-1">
                     <CornerDownRightIcon className="size-3 text-muted-foreground" />
                     <span className="text-sm text-muted-foreground">
-                        {row.original.No_OT || "N/A"}dsf
-                        {row.original.ID_Dossier || "N/A"}
+                        {row.original.No_OT || "N/A"}
                     </span>
                 </div>
             </div>
