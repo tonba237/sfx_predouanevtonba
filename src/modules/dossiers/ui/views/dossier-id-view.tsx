@@ -18,8 +18,11 @@ import { DossierIdHeader } from "../components/dossier-id-header";
 import { UpdateDossierDialog } from "../components/update-dossier-dialog";
 import { ColisageImportForDossier } from "../components/colisage-import-for-dossier";
 import { ColisageListForDossier } from "../components/colisage-list-for-dossier";
+import { ColisageHeaderForDossier } from "../components/colisage-header-for-dossier";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { NoteDetailView } from "./note-detail-view";
+import { ColisageImportDialog } from "../components/colisage-template";
+
 
 interface Props {
     dossierId: string;
@@ -252,8 +255,11 @@ export const DossierIdView = ({ dossierId, dossier }: Props) => {
                                         <p className="text-sm text-muted-foreground">
                                             Gérez les colisages de ce dossier
                                         </p>
-                                        <ColisageImportForDossier dossierId={dossier.ID_Dossier} />
+                                        {/* <ColisageImportForDossier dossierId={dossier.ID_Dossier} /> */}
+                                    
                                     </div>
+                                    <ColisageImportDialog dossierId={dossier.ID_Dossier} />
+                                    <ColisageHeaderForDossier dosierId={dossier.ID_Dossier} />
                                     <ColisageListForDossier dossierId={dossier.ID_Dossier} />
                                 </div>
                             </TabsContent>

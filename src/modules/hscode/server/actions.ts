@@ -300,7 +300,7 @@ export async function previewHSCodesImport(formData: FormData) {
       >`
         SELECT TOP 1 [ID HS Code] AS ID_HS_Code
         FROM [dbo].[THSCodes]
-        WHERE [HS Code] = ${HS_Code}
+        WHERE [HS Code] = N'${HS_Code}'
           AND [Entite] = 0
       `;
 

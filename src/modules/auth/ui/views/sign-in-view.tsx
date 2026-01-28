@@ -18,7 +18,7 @@ import { useForm } from "react-hook-form";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { OctagonAlertIcon } from "lucide-react";
-import { signIn } from "@/modules/auth/server/actions";
+import  { signIn }  from "@/modules/auth/server/actions";
 
 
 const formSchema = z.object({

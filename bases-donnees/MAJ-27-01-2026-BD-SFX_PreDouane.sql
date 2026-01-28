@@ -447,3 +447,8 @@ END
  
 
 GO
+
+-- Mettre Devise Active à 0
+UPDATE TDevises
+SET [Devise Inactive] = 0
+WHERE [ID Devise] <> 0

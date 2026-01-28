@@ -92,20 +92,31 @@ export async function checkConversionExists(dateDeclaration: Date, entiteId: num
  * Retour : Objet { success: boolean, error?: string }
  * ============================================================================
  */
+/**
+ * ============================================================================
+ * FONCTION : genererNotesDetail (VERSION PRO / SQL SAFE)
+ * ============================================================================
+ * - Vérifie les prérequis métier
+ * - Récupère la date exacte de conversion depuis la BD
+ * - Vérifie l'existence des taux de change
+ * - Appelle la procédure stockée SQL Server de manière SAFE
+ * ============================================================================
+ */
 export async function genererNotesDetail(dossierId: number, dateDeclaration: Date) {
-    console.log('🚀 [genererNotesDetail] DEBUT - Dossier:', dossierId, 'Date:', dateDeclaration);
     
     try {
-        console.log('📝 [genererNotesDetail] Étape 1: Vérification session');
+        /* --------------------------------------------------------------------
+         * 1️⃣ SÉCURITÉ : SESSION
+         * ------------------------------------------------------------------ */
         const session = await getSession();
         if (!session.user) {
             console.log('❌ [genererNotesDetail] Non authentifié');
             return { success: false, error: "Non authentifié" };
         }
-        console.log('✅ [genererNotesDetail] Session OK');
 
-        // Vérifications préalables
-        console.log('📝 [genererNotesDetail] Étape 2: Récupération dossier');
+        /* --------------------------------------------------------------------
+         * 2️⃣ RÉCUPÉRATION DU DOSSIER
+         * ------------------------------------------------------------------ */
         const dossier = await prisma.tDossiers.findUnique({
             where: { ID_Dossier: dossierId },
             select: {
@@ -115,33 +126,33 @@ export async function genererNotesDetail(dossierId: number, dateDeclaration: Dat
         });
 
         if (!dossier) {
-            console.log('❌ [genererNotesDetail] Dossier non trouvé');
             return { success: false, error: "Dossier non trouvé" };
         }
-        console.log('✅ [genererNotesDetail] Dossier trouvé - Statut:', dossier.Statut_Dossier, 'Branche:', dossier.Branche);
 
         if (dossier.Statut_Dossier !== 0) {
-            console.log('❌ [genererNotesDetail] Statut invalide:', dossier.Statut_Dossier);
             return {
                 success: false,
                 error: "Le dossier doit être en cours (statut = 0) pour générer les notes de détail",
             };
         }
 
-        // Vérifier qu'il y a des colisages
-        console.log('📝 [genererNotesDetail] Étape 3: Vérification colisages');
+         /* --------------------------------------------------------------------
+         * 3️⃣ VÉRIFICATION DES COLISAGES
+         * ------------------------------------------------------------------ */
         const colisagesCount = await prisma.tColisageDossiers.count({
             where: { Dossier: dossierId },
         });
-        console.log('✅ [genererNotesDetail] Colisages trouvés:', colisagesCount);
 
         if (colisagesCount === 0) {
-            console.log('❌ [genererNotesDetail] Aucun colisage');
-            return { success: false, error: "Aucun colisage trouvé pour ce dossier" };
+            return { 
+                success: false, 
+                error: "Aucun colisage trouvé pour ce dossier" 
+            };
         }
 
-        // Vérifier que tous les colisages ont un HS Code et un régime
-        console.log('📝 [genererNotesDetail] Étape 4: Vérification HS Code et régimes');
+        /* --------------------------------------------------------------------
+         * 4️⃣ VÉRIFICATION HS CODE + RÉGIME
+         * ------------------------------------------------------------------ */
         const colisagesSansRegime = await prisma.tColisageDossiers.count({
             where: {
                 Dossier: dossierId,
@@ -150,55 +161,52 @@ export async function genererNotesDetail(dossierId: number, dateDeclaration: Dat
         });
 
         if (colisagesSansRegime > 0) {
-            console.log('❌ [genererNotesDetail] Colisages sans régime:', colisagesSansRegime);
             return {
                 success: false,
                 error: `${colisagesSansRegime} colisage(s) n'ont pas de HS Code ou de régime de déclaration`,
             };
         }
-        console.log('✅ [genererNotesDetail] Tous les colisages ont HS Code et régime');
-
-        // Récupérer la date exacte de la conversion (avec l'heure) depuis la BD
-        console.log('📝 [genererNotesDetail] Étape 5: Récupération branche et entité');
+        
+        /* --------------------------------------------------------------------
+         * 5️⃣ RÉCUPÉRATION DE L’ENTITÉ VIA LA BRANCHE
+         * ------------------------------------------------------------------ */
         const branche = await prisma.tBranches.findUnique({
             where: { ID_Branche: dossier.Branche },
             select: { Entite: true },
         });
 
         if (!branche) {
-            console.log('❌ [genererNotesDetail] Branche non trouvée');
             return { success: false, error: "Branche non trouvée" };
         }
-        console.log('✅ [genererNotesDetail] Branche trouvée - Entité:', branche.Entite);
-
-        console.log('📝 [genererNotesDetail] Étape 6: Recherche conversion pour date:', dateDeclaration);
-        const dateStr = dateDeclaration.toISOString().split('T')[0];
-        console.log('   Date formatée:', dateStr);
         
-        const conversions = await prisma.$queryRaw<any[]>`
-            SELECT [ID Convertion], [Date Convertion]
-            FROM TConvertions
-            WHERE CAST([Date Convertion] AS DATE) = CAST(${dateStr} AS DATE)
+        /* --------------------------------------------------------------------
+         * 6️⃣ RÉCUPÉRATION DE LA CONVERSION (DATE EXACTE BD)
+        * ------------------------------------------------------------------ */
+        const dateStr = dateDeclaration.toISOString().split('T')[0];
+        
+        const conversions = await prisma.$queryRaw<
+                { ID_Convertion: number; Date_Convertion: Date }[]
+            >`
+                SELECT [ID Convertion] AS ID_Convertion,
+                    [Date Convertion] AS Date_Convertion
+                FROM TConvertions
+                WHERE CAST([Date Convertion] AS DATE) = CAST(${dateStr} AS DATE)
                 AND [Entite] = ${branche.Entite}
-        `;
-        console.log('✅ [genererNotesDetail] Conversions trouvées:', conversions.length);
+            `;
 
         if (conversions.length === 0) {
-            console.log('❌ [genererNotesDetail] Aucune conversion pour cette date');
             return {
                 success: false,
                 error: "Aucune conversion trouvée pour cette date et cette entité",
             };
         }
-        console.log('   Conversion ID:', conversions[0]['ID Convertion'], 'Date:', conversions[0]['Date Convertion']);
 
-        const conversionId = conversions[0]['ID Convertion'];
-        const dateConversionExacte = conversions[0]['Date Convertion'];
+        const conversionId = conversions[0].ID_Convertion;
+        const dateConversionExacte = conversions[0].Date_Convertion;
 
-        // Vérifier que tous les taux de change existent pour les devises du dossier
-        console.log('📝 [genererNotesDetail] Étape 6b: Vérification des taux de change');
-        
-        // Récupérer les devises utilisées dans le dossier
+         /* --------------------------------------------------------------------
+         * 7️⃣ VÉRIFICATION DES TAUX DE CHANGE
+         * ------------------------------------------------------------------ */
         const devisesUtilisees = await prisma.$queryRaw<any[]>`
             SELECT DISTINCT 
                 cd.[Devise] as ID_Devise,
@@ -245,27 +253,29 @@ export async function genererNotesDetail(dossierId: number, dateDeclaration: Dat
                 dateConvertion: dateConversionExacte,
             };
         }
-        console.log('✅ [genererNotesDetail] Tous les taux de change existent');
-
-        // Appeler la procédure stockée avec la date exacte
-        console.log('📝 [genererNotesDetail] Étape 7: Appel procédure stockée');
-        console.log('   Dossier:', dossierId);
-        console.log('   Date conversion:', dateConversionExacte);
-        console.log('   Type:', typeof dateConversionExacte);
         
         try {
             // Utiliser la date EXACTE de la conversion (avec l'heure exacte de la BD)
             let dateFormatted: string;
             if (dateConversionExacte instanceof Date) {
-                // Utiliser la date complète avec l'heure exacte
-                dateFormatted = dateConversionExacte.toISOString().replace('T', ' ').replace('Z', '');
+                // Formater pour SQL Server datetime: 'YYYY-MM-DD HH:MM:SS' (sans millisecondes ni Z)
+                const isoString = dateConversionExacte.toISOString();
+                dateFormatted = isoString.replace('T', ' ').replace('.000Z', '');
             } else {
-                // Si c'est une string, l'utiliser telle quelle
-                dateFormatted = dateConversionExacte.toString();
+                // Si c'est une string, essayer de la parser et la reformatter
+                const parsedDate = new Date(dateConversionExacte);
+                if (!isNaN(parsedDate.getTime())) {
+                    const isoString = parsedDate.toISOString();
+                    dateFormatted = isoString.replace('T', ' ').replace('.000Z', '');
+                } else {
+                    dateFormatted = dateConversionExacte.toString();
+                }
             }
             
             console.log('   Date formatée SQL (EXACTE de la BD):', dateFormatted);
-            const query = `EXEC [dbo].[pSP_CreerNoteDetail] @Id_Dossier = ${dossierId}, @DateDeclaration = '${dateFormatted}'`;
+            
+            // Utiliser CAST pour forcer la conversion explicite en datetime
+            const query = `EXEC [dbo].[pSP_CreerNoteDetail] @Id_Dossier = ${dossierId}, @DateDeclaration = CAST('${dateFormatted}' AS datetime)`;
             console.log('   Query:', query);
             
             await prisma.$executeRawUnsafe(query);
